@@ -78,7 +78,7 @@ cmd({
 
 cmd({
     pattern: "play",
-    desc: "Download YouTube audio with thumbnail (Izumi API)",
+    desc: "Download YouTube audio with thumbnail (Your API)",
     category: "download",
     react: "🎶",
     filename: __filename
@@ -90,53 +90,38 @@ cmd({
         if (!videos || videos.length === 0) return await reply("❌ No results found!");
 
         const vid = videos[0];
+        const videoUrl = vid.url;
 
-        // 🎵 Send video thumbnail + info first
+        // 🎵 Send thumbnail + info first
         await conn.sendMessage(from, {
             image: { url: vid.thumbnail },
             caption: `- *AUDIO DOWNLOADER 🎧*\n╭━━❐━⪼\n┇๏ *Title* - ${vid.title}\n┇๏ *Duration* - ${vid.timestamp}\n┇๏ *Views* - ${vid.views.toLocaleString()}\n┇๏ *Author* - ${vid.author.name}\n┇๏ *Status* - Downloading...\n╰━━❑━⪼\n> *© Pᴏᴡᴇʀᴇᴅ Bʏ 𝙏𝙚𝙘𝙝𝙓 𝙈𝘿*`
         }, { quoted: mek });
 
-        const videoUrl = vid.url;
-
-        // Multiple APIs with fallback
-        const apis = [
-            `https://apiskeith.top/download/audio?url=${encodeURIComponent(videoUrl)}`,
-            `https://apiskeith.top/download/ytmp3?url=${encodeURIComponent(videoUrl)}`,
-            `https://apiskeith.top/download/dlmp3?url=${encodeURIComponent(videoUrl)}`,
-            `https://apiskeith.top/download/mp3?url=${encodeURIComponent(videoUrl)}`,
-            `https://apiskeith.top/download/yta?url=${encodeURIComponent(videoUrl)}`,
-            `https://apiskeith.top/download/ytv?url=${encodeURIComponent(videoUrl)}`
-        ];
+        // === Your API ===
+        const apiUrl = `https://adeelmdmp3.vercel.app/download?url=${encodeURIComponent(videoUrl)}&key=adeelbaloch.dev`;
 
         let audioUrl = null;
         let title = vid.title || "Unknown Song";
 
-        for (let api of apis) {
-            try {
-                const res = await axios.get(api, { timeout: 15000 });
-                const json = res.data;
+        try {
+            const res = await axios.get(apiUrl, { timeout: 30000 }); // Increased timeout
+            const json = res.data;
 
-                if (json?.status === true && json?.result) {
-                    audioUrl = typeof json.result === 'string' ? json.result : 
-                              json.result.download || json.result.url || json.result.link;
-
-                    if (audioUrl && audioUrl.includes('http')) {
-                        console.log(`✅ Success with: ${api}`);
-                        break;
-                    }
-                }
-            } catch (err) {
-                console.log(`❌ Failed: ${api}`);
-                continue;
+            if (json?.status === true && json?.result) {
+                audioUrl = typeof json.result === 'string' 
+                    ? json.result 
+                    : json.result.download || json.result.url || json.result.link;
             }
+        } catch (err) {
+            console.log("Your API Error:", err.message);
         }
 
         if (!audioUrl) {
-            return await reply("❌ All APIs failed! Please try again later.");
+            return await reply("❌ API se audio nahi mila. Thori der baad try karen!");
         }
 
-        // 🎧 Send final audio file
+        // 🎧 Send audio
         await conn.sendMessage(from, {
             audio: { url: audioUrl },
             mimetype: "audio/mpeg",
