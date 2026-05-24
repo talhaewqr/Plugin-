@@ -78,61 +78,136 @@ cmd({
 
 cmd({
     pattern: "play",
-    desc: "Download YouTube audio with thumbnail (Your API)",
+    desc: "Download YouTube audio with thumbnail",
     category: "download",
     react: "🎶",
     filename: __filename
 }, async (conn, mek, m, { from, q, reply }) => {
-    try {
-        if (!q) return await reply("🎧 Please provide a song name!\n\nExample: .play Faded Alan Walker");
 
-        const { videos } = await yts(q);
-        if (!videos || videos.length === 0) return await reply("❌ No results found!");
+    try {
+
+        if (!q) {
+            return reply("🎧 Please provide a song name!\n\nExample: .play Faded Alan Walker");
+        }
+
+        // 🔍 Search video
+        const search = await yts(q);
+
+        if (!search.videos || search.videos.length < 1) {
+            return reply("❌ No results found!");
+        }
+
+        // ✅ Filter videos
+        const videos = search.videos.filter(v =>
+            !v.live &&
+            v.seconds < 7200
+        );
+
+        if (!videos.length) {
+            return reply("❌ No valid videos found!");
+        }
 
         const vid = videos[0];
         const videoUrl = vid.url;
 
-        // 🎵 Send thumbnail + info first
+        // 🎵 Song Info
+        const title = vid.title || "Unknown Song";
+        const duration = vid.timestamp || "Unknown";
+        const views = vid.views ? vid.views.toLocaleString() : "Unknown";
+        const author = vid.author?.name || "Unknown";
+
+        // 🖼️ Send thumbnail first
         await conn.sendMessage(from, {
             image: { url: vid.thumbnail },
-            caption: `- *AUDIO DOWNLOADER 🎧*\n╭━━❐━⪼\n┇๏ *Title* - ${vid.title}\n┇๏ *Duration* - ${vid.timestamp}\n┇๏ *Views* - ${vid.views.toLocaleString()}\n┇๏ *Author* - ${vid.author.name}\n┇๏ *Status* - Downloading...\n╰━━❑━⪼\n> *© Pᴏᴡᴇʀᴇᴅ Bʏ 𝙏𝙚𝙘𝙝𝙓 𝙈𝘿*`
+            caption:
+`- *AUDIO DOWNLOADER 🎧*
+
+╭━━❐━⪼
+┇๏ *Title* - ${title}
+┇๏ *Duration* - ${duration}
+┇๏ *Views* - ${views}
+┇๏ *Author* - ${author}
+┇๏ *Status* - Downloading...
+╰━━❑━⪼
+
+> *© Powered By TechX MD*`
         }, { quoted: mek });
 
-        // === Your API ===
+        // 🔗 API URL
         const apiUrl = `https://adeelmdmp3.vercel.app/download?url=${encodeURIComponent(videoUrl)}&key=adeelbaloch.dev`;
 
-        let audioUrl = null;
-        let title = vid.title || "Unknown Song";
+        let audioUrl;
 
         try {
-            const res = await axios.get(apiUrl, { timeout: 30000 }); // Increased timeout
-            const json = res.data;
 
-            if (json?.status === true && json?.result) {
-                audioUrl = typeof json.result === 'string' 
-                    ? json.result 
-                    : json.result.download || json.result.url || json.result.link;
+            const response = await axios.get(apiUrl, {
+                timeout: 30000,
+                headers: {
+                    "User-Agent": "Mozilla/5.0"
+                }
+            });
+
+            const data = response.data;
+
+            // ✅ Different response support
+            if (data?.status === true) {
+
+                if (typeof data.result === "string") {
+                    audioUrl = data.result;
+                }
+
+                else if (typeof data.result === "object") {
+                    audioUrl =
+                        data.result.download ||
+                        data.result.url ||
+                        data.result.link;
+                }
             }
-        } catch (err) {
-            console.log("Your API Error:", err.message);
+
+        } catch (apiErr) {
+
+            console.log("API ERROR:", apiErr.message);
+
+            return reply("❌ Audio API failed!\nTry again later.");
         }
 
+        // ❌ No audio
         if (!audioUrl) {
-            return await reply("❌ API se audio nahi mila. Thori der baad try karen!");
+            return reply("❌ Failed to fetch audio link!");
         }
+
+        // 🧹 Clean filename
+        const safeFileName = title
+            .replace(/[\\/:*?"<>|]/g, "")
+            .slice(0, 60);
 
         // 🎧 Send audio
         await conn.sendMessage(from, {
             audio: { url: audioUrl },
             mimetype: "audio/mpeg",
-            fileName: `${title}.mp3`
+            fileName: `${safeFileName}.mp3`,
+            ptt: false
         }, { quoted: mek });
 
-        await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
+        // ✅ React success
+        await conn.sendMessage(from, {
+            react: {
+                text: "✅",
+                key: m.key
+            }
+        });
 
     } catch (e) {
-        console.error("Error in .play command:", e);
-        await reply("❌ Error occurred, please try again later!");
-        await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
+
+        console.log("PLAY CMD ERROR:", e);
+
+        await conn.sendMessage(from, {
+            react: {
+                text: "❌",
+                key: m.key
+            }
+        });
+
+        return reply("❌ Error occurred while processing your request!");
     }
 });
